@@ -73,11 +73,20 @@ drive.mount('/content/drive')
 ## 5. 📁 프로젝트 구조
 ```
 mind-signal-data-engine/
-
-
-├── .gitignore
-├── requirements.txt
-└── README.md
+├── core/               # 핵심 엔진
+│   ├── analyzer.py     # FAA, ERP 계산 로직 (수학적 연산)
+│   ├── main.py         # 프로그램을 실행하는 엔트리 포인트
+│   └── streamer.py     # Redis로 데이터를 쏘는 실시간 스트리머
+├── sdk/                # 제공받은 원본 소스 코드 (수정 금지)
+│   ├── cortex.py       # 핵심 통신 라이브러리
+│   ├── marker.py       # 마커 로직 참고용
+│   ├── record.py       # 녹화 로직 참고용
+│   └── sub_data.py     # 데이터 구독 참고용
+├── .env.local          # CLIENT_ID, CLIENT_SECRET 보관
+├── .env.example        # 환경 변수 가이드 
+├── .gitignore          # 제외 목록
+├── requirements.txt    # 의존성 목록
+└── README.md           # 프로젝트 설명서
 ```
 
 ## 6. 🤝 협업 가이드라인 (Contribution Guidelines)
@@ -152,5 +161,10 @@ perf(train): reduce inference time by caching model
 
 - **docs/** → 문서 작업  
   예) `docs/update-readme-install-guide`, `docs/add-evaluation-results`
+
+---
+참고 자료 링크
+🔗 [Emotiv Cortex API Python 공식 예제 저장소](https://github.com/Emotiv/cortex-example/tree/master/python)
+🔗 [Emotiv Cortex API](https://emotiv.gitbook.io/cortex-api)
 
 ---

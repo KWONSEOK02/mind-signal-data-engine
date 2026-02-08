@@ -1,0 +1,64 @@
+# Python 컴파일 및 캐시 파일
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 가상 환경 (Virtual Environments)
+venv/
+env/
+ENV/
+.env/
+bin/
+lib/
+include/
+
+# 환경 변수 및 보안 (Secret keys)
+# 실제 키가 들어있는 파일은 제외하고 템플릿만 공유
+.env*
+.env.local
+.env.development
+.env.test
+!.env.example
+
+# IDE 및 에디터 설정 (개인별 설정 충돌 방지)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 프로젝트 데이터 및 결과물
+# 실험을 통해 생성되는 뇌파 데이터 파일들은 제외
+data/
+*.csv
+*.edf
+*.log
+
+# 테스트 및 커버리지
+/coverage/
+.tox/
+.nosetests
+nosetests.xml
+.coverage
+.coverage.*
+.cache
+
+# 빌드 및 배포 관련
+build/
+dist/
+*.spec
+*.egg-info/
+.installed.cfg
+*.egg
+
+# OS 특정 파일 (맥/윈도우 시스템 파일)
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# 기타 보안 파일
+*.pem
+*.key
