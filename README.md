@@ -1,4 +1,4 @@
-# Asymmetric_Gomoku_MARL (오목 비대칭 멀티에이전트)
+# Amind-signal-data-engine
 
 ## 1. 📝 프로젝트 개요 (Project Overview)
 
