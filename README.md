@@ -167,6 +167,7 @@ perf(train): reduce inference time by caching model
 
 ---
 참고 자료 링크
+
 *🔗 [Emotiv Cortex API Python 공식 예제 저장소](https://github.com/Emotiv/cortex-example/tree/master/python)
 
 *🔗 [Emotiv Cortex API](https://emotiv.gitbook.io/cortex-api)
