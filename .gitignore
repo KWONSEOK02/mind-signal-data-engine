@@ -62,3 +62,4 @@ desktop.ini
 # 기타 보안 파일
 *.pem
 *.key
+*.csv

@@ -26,7 +26,7 @@ cd mind-signal-data-engine
 
 ### 2. 로컬 가상 환경 설정 (Conda)
 
-#### Python 3.12로 'gomoku_py312' 환경 생성
+#### Python 3.10로 'mind-signal' 환경 생성
 ```bash
 conda create -n mind-signal python=3.10
 conda activate mind-signal
@@ -37,38 +37,28 @@ conda activate mind-signal
 pip install -r requirements.txt
 ```
 
-### 3. Colab을 이용한 GPU 학습 (Training)
-#### 1.Colab 노트북을 열고 런타임 유형을 T4 GPU로 변경합니다.
+### 3. 각 파일 실행 명령어
+ ```bash
+ python -m core.main
+ python -m core.streamer
+ ``` 
 
-#### 2.Google Drive를 마운트(연결)합니다.
-```bash
-from google.colab import drive
-drive.mount('/content/drive')
-```
+## 4. 코드 스타일 관리 (Lint & Format)
+협업 시 동일한 코딩 스타일을 유지하기 위해 아래 명령어를 권장합니다.
 
+* **코드 자동 정렬 (Formatter):**
+  ```bash
+  # Black(포맷팅)
+  black .
+  
+  #isort(임포트 정렬)
+  isort .
 
-#### 3. 프로젝트를 클론하고 라이브러리를 설치
-```bash
-# Git 클론 경로가 꼬이지 않도록, Colab 기본 디렉토리(/content)로 이동합니다.
-%cd /content
-
-# GitHub에서 프로젝트를 복제합니다. (마크다운 없이 URL만 사용)
-!git clone https://github.com/KWONSEOK02/mind-signal-data-engine.git
-
-# 복제된 폴더 안으로 작업 디렉터리를 이동합니다.
-%cd mind-signal-data-engine
-
-# 프로젝트 폴더 안에서 requirements.txt 파일로 라이브러리를 설치합니다.
-!pip install -r requirements.txt
-
-# 2. 
-#
-!pip install 
-```
-
-## 4. 알고리즘 (Algorithms)
-
-
+  # 코드 스타일 검사 (Linter):
+  # PEP8 표준 준수 여부 및 잠재적 에러 확인
+  flake8 .
+  ```
+---
 
 ## 5. 📁 프로젝트 구조
 ```
@@ -82,14 +72,27 @@ mind-signal-data-engine/
 │   ├── marker.py       # 마커 로직 참고용
 │   ├── record.py       # 녹화 로직 참고용
 │   └── sub_data.py     # 데이터 구독 참고용
-├── .env.local          # CLIENT_ID, CLIENT_SECRET 보관
 ├── .env.example        # 환경 변수 가이드 
+├── .env.local          # CLIENT_ID, CLIENT_SECRET 보관
+├── .flake8             # 파이썬 코드 스타일 가이드(PEP8) 및 문법 검사 설정 
 ├── .gitignore          # 제외 목록
-├── requirements.txt    # 의존성 목록
-└── README.md           # 프로젝트 설명서
+├── pyproject.toml      # 코드 포맷터(Black, isort) 통합 설정 파일
+├── README.md           # 프로젝트 설명서
+└── requirements.txt    # 의존성 목록
 ```
 
 ## 6. 🤝 협업 가이드라인 (Contribution Guidelines)
+
+---
+
+### 파일별 핵심 역할 요약 (팀원 공유용)
+
+| 파일명 | 핵심 역할 |
+| :--- | :--- |
+| **`.flake8`** | **ESLint의 파이썬 버전**입니다. 코드 가독성을 해치는 요소나 사용하지 않는 변수 등을 잡아내며, 수정하면 안 되는 `sdk/` 폴더는 무시하도록 설정되어 있습니다. |
+| **`pyproject.toml`** | **Prettier의 파이썬 설정**과 같습니다. `Black`이 코드를 어떻게 예쁘게 정렬할지, `isort`가 상단 `import`문을 어떤 순서로 배치할지 정의합니다. |
+
+---
 
 ### Git Workflow
 - `master` (Production): 최종 배포 브랜치
@@ -164,7 +167,8 @@ perf(train): reduce inference time by caching model
 
 ---
 참고 자료 링크
-🔗 [Emotiv Cortex API Python 공식 예제 저장소](https://github.com/Emotiv/cortex-example/tree/master/python)
-🔗 [Emotiv Cortex API](https://emotiv.gitbook.io/cortex-api)
+*🔗 [Emotiv Cortex API Python 공식 예제 저장소](https://github.com/Emotiv/cortex-example/tree/master/python)
+
+*🔗 [Emotiv Cortex API](https://emotiv.gitbook.io/cortex-api)
 
 ---

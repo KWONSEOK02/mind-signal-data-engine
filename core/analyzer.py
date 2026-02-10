@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.signal import welch, butter, lfilter
+from scipy.signal import butter, lfilter, welch
+
 
 class MindSignalAnalyzer:
     @staticmethod
@@ -10,16 +11,16 @@ class MindSignalAnalyzer:
         """
         # 1. Welch 방법을 이용한 주파수 밀도(PSD) 계산
         fs = 128  # Emotiv Insight 샘플링 레이트
-        freqs, psd = welch(eeg_data, fs, nperseg=fs*2)
-        
+        freqs, psd = welch(eeg_data, fs, nperseg=fs * 2)
+
         # 2. Alpha 대역(8-13Hz) 추출
         alpha_mask = (freqs >= 8) & (freqs <= 13)
         alpha_power = np.mean(psd[:, alpha_mask], axis=1)
-        
+
         # 3. 비대칭 지수 계산
         left_alpha = alpha_power[ch_left_idx]
         right_alpha = alpha_power[ch_right_idx]
-        
+
         faa_score = np.log(right_alpha) - np.log(left_alpha)
         return faa_score
 
@@ -38,7 +39,7 @@ class MindSignalAnalyzer:
         nyq = 0.5 * self.fs
         low = lowcut / nyq
         high = highcut / nyq
-        b, a = butter(order, [low, high], btype='band')
+        b, a = butter(order, [low, high], btype="band")
         return b, a
 
     def filter_alpha(self, data):

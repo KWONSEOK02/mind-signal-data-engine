@@ -428,6 +428,8 @@ class Cortex(Dispatcher):
     def handle_error(self, recv_dic):
         req_id = recv_dic['id']
         print('handle_error: request Id ' + str(req_id))
+        # 아래 한 줄을 추가해 주세요! 
+        print(f"❌ 상세 에러 내용: {recv_dic['error']}") 
         self.emit('inform_error', error_data=recv_dic['error'])
     
     def handle_warning(self, warning_dic):
