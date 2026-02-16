@@ -42,17 +42,24 @@ class MindSignalAnalyzer:
         b, a = butter(order, [low, high], btype="band")
         return b, a
 
-    def filter_alpha(self, data):
-        """알파파(8-12Hz) 추출: 휴식 및 차분한 상태 분석용"""
-        b, a = self._butter_bandpass(8, 12, order=5)
-        return lfilter(b, a, data)
-
-    def filter_beta(self, data):
-        """베타파(13-30Hz) 추출: 각성 및 집중 상태 분석용"""
-        b, a = self._butter_bandpass(13, 30, order=5)
-        return lfilter(b, a, data)
+    # --- 5가지 주요 파형 필터 ---
+    def filter_delta(self, data): return lfilter(*self._butter_bandpass(0.5, 4), data)
+    def filter_theta(self, data): return lfilter(*self._butter_bandpass(4, 8), data)
+    def filter_alpha(self, data): return lfilter(*self._butter_bandpass(8, 12), data)
+    def filter_beta(self, data):  return lfilter(*self._butter_bandpass(13, 30), data)
+    def filter_gamma(self, data): return lfilter(*self._butter_bandpass(30, 45), data)
 
     def get_rms_power(self, filtered_data):
         """필터링된 신호의 강도(RMS) 계산"""
         # 신호의 크기를 수치화하여 '현재 알파파가 얼마나 강한지' 판단할 때 씁니다.
         return np.sqrt(np.mean(np.square(filtered_data)))
+
+    def get_all_powers(self, eeg_values):
+        """5개 파형의 강도를 한 번에 계산하여 반환"""
+        return {
+            "delta": self.get_rms_power(self.filter_delta(eeg_values)),
+            "theta": self.get_rms_power(self.filter_theta(eeg_values)),
+            "alpha": self.get_rms_power(self.filter_alpha(eeg_values)),
+            "beta":  self.get_rms_power(self.filter_beta(eeg_values)),
+            "gamma": self.get_rms_power(self.filter_gamma(eeg_values)),
+        }    
