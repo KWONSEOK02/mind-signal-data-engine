@@ -210,6 +210,7 @@ class MindSignalStreamer(Cortex):
     def on_inform_error(self, *args, **kwargs):
         error_data = kwargs.get("error_data")
         print(f"에러 발생함: {error_data}")
+        self.close()  # 에러 발생 시 프로세스 정상 종료 보장함
 
     def on_close(self, *args, **kwargs):
         if hasattr(self, "csv_file") and not self.csv_file.closed:
