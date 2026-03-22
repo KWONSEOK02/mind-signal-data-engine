@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel
 
 from server.config import settings
 from server.services.analysis import find_csv_files, load_session_data
