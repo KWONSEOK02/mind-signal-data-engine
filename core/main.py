@@ -1,12 +1,13 @@
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from core.streamer import MindSignalStreamer
 
 # 환경 변수 로드 수행함
-load_dotenv(".env.local")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env.local")
 
 
 def main():
@@ -28,10 +29,22 @@ def main():
     group_id = sys.argv[1]
     subject_index = sys.argv[2]
 
+    # subject_index에 매핑된 헤드셋 ID 조회함 (미설정 시 SDK 자동 선택)
+    headset_id = os.getenv(f"HEADSET_ID_{subject_index}", "")
+
     print(f"Mind Signal Engine 구동 시작함 (Group: {group_id}, Index: {subject_index})")
+    if headset_id:
+        print(f"지정 헤드셋: {headset_id}")
+    else:
+        print(
+            f"[WARNING] HEADSET_ID_{subject_index} 미설정"
+            " — SDK가 첫 번째 헤드셋을 자동 선택함"
+        )
 
     # 스트리머 인스턴스 생성 및 실행 수행함
-    streamer = MindSignalStreamer(group_id, subject_index, client_id, client_secret)
+    streamer = MindSignalStreamer(
+        group_id, subject_index, client_id, client_secret, headset_id=headset_id
+    )
     streamer.open()
 
 

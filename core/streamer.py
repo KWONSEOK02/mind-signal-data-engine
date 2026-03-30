@@ -7,13 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import redis
-from dotenv import load_dotenv
 
 from core.analyzer import MindSignalAnalyzer
 from sdk.cortex import Cortex
-
-# 환경 변수 로드 수행함
-load_dotenv(".env.local")
 
 
 class MindSignalStreamer(Cortex):
@@ -21,7 +17,9 @@ class MindSignalStreamer(Cortex):
     [Engine] EEG 시계열 버퍼링 및 분석을 통해 실시간 데이터를 발행하는 스트리머임
     """
 
-    def __init__(self, group_id, subject_index, *args, **kwargs):
+    def __init__(self, group_id, subject_index, *args, headset_id="", **kwargs):
+        if headset_id:
+            kwargs["headset_id"] = headset_id
         super().__init__(*args, **kwargs)
         self.analyzer = MindSignalAnalyzer()
 
@@ -35,13 +33,13 @@ class MindSignalStreamer(Cortex):
         self.duration_min = int(os.getenv("EXPERIMENT_DURATION_MINUTES", 10))
         self.duration_sec = self.duration_min * 60
 
-        # 2. Redis 채널 설정 및 연결 수행함
+        # 2. Redis 채널 설정 및 연결 수행함 (REDIS_URL 우선, 없으면 HOST/PORT 폴백)
         self.channel = f"mind-signal:{self.group_id}:subject:{self.subject_index}"
-        self.r = redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
-            db=0,
-        )
+        default_host = os.getenv("REDIS_HOST", "localhost")
+        default_port = os.getenv("REDIS_PORT", 6379)
+        fallback = f"redis://{default_host}:{default_port}/0"
+        redis_url = os.getenv("REDIS_URL", fallback)
+        self.r = redis.from_url(redis_url)
 
         # 3. CSV 저장 경로 및 헤더 설정 수행함
         base_path = Path(__file__).resolve().parent.parent.parent
