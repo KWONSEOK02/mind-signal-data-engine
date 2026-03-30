@@ -1,0 +1,144 @@
+from pathlib import Path
+
+import pandas as pd
+from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
+
+from server.config import settings
+from server.services.analysis import compute_session_analysis
+from server.services.markdown import dataframe_to_markdown
+
+router = APIRouter()
+
+
+class AnalyzeRequest(BaseModel):
+    """분석 요청 페이로드 스키마임"""
+
+    group_id: str
+    subject_indices: list[int]  # [1, 2] 등
+    include_markdown: bool = False  # LLM 전달용 MD 변환 포함 여부
+
+
+class AnalyzeResponse(BaseModel):
+    """분석 응답 페이로드 스키마임"""
+
+    group_id: str
+    subjects: list[dict]
+    synchrony_score: float | None = None
+    markdown: str | None = None
+
+
+@router.post("/analyze")
+async def analyze(
+    body: AnalyzeRequest,
+    x_engine_secret: str = Header(alias="X-Engine-Secret"),
+):
+    """백엔드로부터 분석 요청을 수신하여 결과를 반환함"""
+    # 1. secret_key 검증 수행함
+    if x_engine_secret != settings.engine_secret_key:
+        raise HTTPException(
+            status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임"
+        )
+
+    # 2. CSV 파일 탐색 및 분석 수행함
+    result = compute_session_analysis(body.group_id, body.subject_indices)
+
+    # 3. LLM용 Markdown 변환 (요청 시)
+    if body.include_markdown:
+        result["markdown"] = dataframe_to_markdown(result["dataframes"])
+
+    # dataframes는 응답에서 제외함
+    result.pop("dataframes", None)
+
+    return AnalyzeResponse(**result)
+
+
+class PipelineParams(BaseModel):
+    """분석 파이프라인 파라미터임"""
+
+    stimulus_duration_sec: int = 60
+    window_size_sec: int = 10
+    n_stimuli: int = 10
+    baseline_duration_sec: int = 30
+    band_cols: list[str] = ["alpha", "beta", "theta", "gamma"]
+
+
+class PipelineRequest(BaseModel):
+    """전체 파이프라인 분석 요청 페이로드 스키마임"""
+
+    group_id: str
+    subject_indices: list[int]
+    params: PipelineParams = PipelineParams()
+    satisfaction_scores: dict[int, float] | None = None  # {1: 7.5, 2: 6.0}
+    include_markdown: bool = False
+
+
+class SubjectFeatureResult(BaseModel):
+    """피실험자별 feature 추출 결과 스키마임"""
+
+    subject_index: int
+    baseline: dict[str, float]
+    features: dict[str, float]
+    n_features: int
+
+
+class PipelineResponse(BaseModel):
+    """전체 파이프라인 분석 응답 페이로드 스키마임"""
+
+    group_id: str
+    subjects: list[SubjectFeatureResult]
+    pair_features: dict[str, float] | None = None
+    y_score: float | None = None
+    synchrony_score: float | None = None
+    pipeline_params: dict
+    markdown: str | None = None
+
+
+@router.post("/analyze/pipeline")
+async def analyze_pipeline(
+    body: PipelineRequest,
+    x_engine_secret: str = Header(alias="X-Engine-Secret"),
+):
+    """알고리즘 명세 기반 전체 파이프라인 분석을 수행함"""
+    # 1. secret_key 검증 수행함
+    if x_engine_secret != settings.engine_secret_key:
+        raise HTTPException(
+            status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임"
+        )
+
+    # 2. 전체 파이프라인 실행함
+    from server.services.analysis import run_full_pipeline
+
+    result = run_full_pipeline(
+        group_id=body.group_id,
+        subject_indices=body.subject_indices,
+        stimulus_duration_sec=body.params.stimulus_duration_sec,
+        window_size_sec=body.params.window_size_sec,
+        n_stimuli=body.params.n_stimuli,
+        baseline_duration_sec=body.params.baseline_duration_sec,
+        band_cols=body.params.band_cols,
+        satisfaction_scores=body.satisfaction_scores,
+    )
+
+    # 3. LLM용 Markdown 변환 (요청 시)
+    if body.include_markdown:
+        from server.services.markdown import (
+            dataframe_to_markdown,
+            features_to_markdown,
+        )
+
+        md_sections = []
+        # 기본 통계 Markdown
+        if result.get("dataframes"):
+            md_sections.append(dataframe_to_markdown(result["dataframes"]))
+        # Feature 매트릭스 Markdown
+        for subj in result.get("subjects", []):
+            md_sections.append(
+                features_to_markdown(subj["subject_index"], subj["features"])
+            )
+        result["markdown"] = "\n\n---\n\n".join(md_sections)
+
+    # dataframes는 응답에서 제외함
+    result.pop("dataframes", None)
+
+    return PipelineResponse(**result)

@@ -63,3 +63,6 @@ desktop.ini
 *.pem
 *.key
 *.csv
+# Project planning (local only)
+.plans/
+context/

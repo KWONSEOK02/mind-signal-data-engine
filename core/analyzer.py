@@ -43,11 +43,20 @@ class MindSignalAnalyzer:
         return b, a
 
     # --- 5가지 주요 파형 필터 ---
-    def filter_delta(self, data): return lfilter(*self._butter_bandpass(0.5, 4), data)
-    def filter_theta(self, data): return lfilter(*self._butter_bandpass(4, 8), data)
-    def filter_alpha(self, data): return lfilter(*self._butter_bandpass(8, 12), data)
-    def filter_beta(self, data):  return lfilter(*self._butter_bandpass(13, 30), data)
-    def filter_gamma(self, data): return lfilter(*self._butter_bandpass(30, 45), data)
+    def filter_delta(self, data):
+        return lfilter(*self._butter_bandpass(0.5, 4), data)
+
+    def filter_theta(self, data):
+        return lfilter(*self._butter_bandpass(4, 8), data)
+
+    def filter_alpha(self, data):
+        return lfilter(*self._butter_bandpass(8, 12), data)
+
+    def filter_beta(self, data):
+        return lfilter(*self._butter_bandpass(13, 30), data)
+
+    def filter_gamma(self, data):
+        return lfilter(*self._butter_bandpass(30, 45), data)
 
     def get_rms_power(self, filtered_data):
         """필터링된 신호의 강도(RMS) 계산"""
@@ -60,6 +69,6 @@ class MindSignalAnalyzer:
             "delta": self.get_rms_power(self.filter_delta(eeg_values)),
             "theta": self.get_rms_power(self.filter_theta(eeg_values)),
             "alpha": self.get_rms_power(self.filter_alpha(eeg_values)),
-            "beta":  self.get_rms_power(self.filter_beta(eeg_values)),
+            "beta": self.get_rms_power(self.filter_beta(eeg_values)),
             "gamma": self.get_rms_power(self.filter_gamma(eeg_values)),
-        }    
+        }
