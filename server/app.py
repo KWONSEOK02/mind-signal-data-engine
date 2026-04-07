@@ -19,6 +19,7 @@ async def lifespan(app: FastAPI):
     # --- startup ---
     if settings.use_ngrok:
         from pyngrok import ngrok
+
         tunnel = ngrok.connect(settings.port, "http")
         app.state.public_url = tunnel.public_url
         print(f"ngrok 퍼블릭 URL 발급됨: {tunnel.public_url}")
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
         heartbeat_task.cancel()
     if settings.use_ngrok:
         from pyngrok import ngrok
+
         ngrok.disconnect(tunnel.public_url)
 
 
