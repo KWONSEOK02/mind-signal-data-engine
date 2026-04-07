@@ -1,15 +1,23 @@
 import csv
 import json
+import logging
 import os
+import signal
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import redis
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import ConnectionError, TimeoutError
+from redis.retry import Retry
 
 from core.analyzer import MindSignalAnalyzer
 from sdk.cortex import Cortex
+
+logger = logging.getLogger(__name__)
 
 
 class MindSignalStreamer(Cortex):
@@ -39,7 +47,12 @@ class MindSignalStreamer(Cortex):
         default_port = os.getenv("REDIS_PORT", 6379)
         fallback = f"redis://{default_host}:{default_port}/0"
         redis_url = os.getenv("REDIS_URL", fallback)
-        self.r = redis.from_url(redis_url)
+        self.r = redis.from_url(
+            redis_url,
+            retry=Retry(ExponentialBackoff(cap=10, base=1), 25),
+            retry_on_error=[ConnectionError, TimeoutError, ConnectionResetError],
+            health_check_interval=1,
+        )
 
         # 3. CSV 저장 경로 및 헤더 설정 수행함
         base_path = Path(__file__).resolve().parent.parent.parent
@@ -85,12 +98,22 @@ class MindSignalStreamer(Cortex):
             "relaxation": 0,
         }
 
-        # 5. 필수 이벤트 바인딩 수행함
+        # 5. 측정 시작 시간 및 watchdog 상태 초기화함
+        self.start_time = time.time()
+        self.last_data_time = time.time()
+        self._watchdog_active = False
+        self._watchdog_interval = 30  # 무데이터 감지 임계값(초)
+
+        # 6. 필수 이벤트 바인딩 수행함
         self.bind(create_session_done=self.on_create_session_done)
         self.bind(new_data_labels=self.on_new_data_labels)
         self.bind(new_eeg_data=self.on_eeg_data_done)
         self.bind(new_met_data=self.on_new_met_data)
         self.bind(inform_error=self.on_inform_error)
+        self.bind(warn_cortex_stop_all_sub=self.on_headset_disconnected)
+
+        # 7. SIGTERM 핸들러 등록함 (외부 종료 시 CSV 저장 보장)
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
 
         print(f"스트리밍 채널 활성화됨: {self.channel}")
         print(f"데이터 저장 경로: {self.csv_path}")
@@ -129,7 +152,56 @@ class MindSignalStreamer(Cortex):
         timer.daemon = True
         timer.start()
 
+        # watchdog 타이머 시작함 (무데이터 감지)
+        self._watchdog_active = True
+        self._start_watchdog()
+
         self.sub_request(["eeg", "met"])
+
+    def _start_watchdog(self):
+        """무데이터 감지 watchdog 스레드 시작함"""
+
+        def _check():
+            while self._watchdog_active:
+                elapsed = time.time() - self.last_data_time
+                if elapsed > self._watchdog_interval:
+                    logger.warning(
+                        f"[WATCHDOG] {elapsed:.0f}초간 EEG 데이터 미수신"
+                        f" (subject {self.subject_index})"
+                    )
+                    try:
+                        status_msg = json.dumps(
+                            {
+                                "type": "headset_status",
+                                "status": "no_data",
+                                "subjectIndex": self.subject_index,
+                                "groupId": self.group_id,
+                                "silentSeconds": round(elapsed),
+                            }
+                        )
+                        self.r.publish(self.channel, status_msg)
+                    except Exception:
+                        pass
+                time.sleep(10)
+
+        t = threading.Thread(target=_check, daemon=True)
+        t.start()
+
+    def on_headset_disconnected(self, *args, **kwargs):
+        """헤드셋 분리 시 알림 발행함 (자동 재연결 안 함)"""
+        print(f"[ALERT] 헤드셋 분리 감지됨 (subject {self.subject_index})")
+        try:
+            status_msg = json.dumps(
+                {
+                    "type": "headset_status",
+                    "status": "disconnected",
+                    "subjectIndex": self.subject_index,
+                    "groupId": self.group_id,
+                }
+            )
+            self.r.publish(self.channel, status_msg)
+        except (ConnectionError, TimeoutError, ConnectionResetError) as e:
+            logger.warning(f"헤드셋 분리 알림 publish 실패: {e}")
 
     def on_new_met_data(self, *args, **kwargs):
         """수신된 MET 배열에서 매핑된 점수 값만 추출함"""
@@ -143,6 +215,9 @@ class MindSignalStreamer(Cortex):
         data = kwargs.get("data")
         eeg_row = data["eeg"]
         cortex_time = data["time"]
+
+        # watchdog 타임스탬프 갱신함
+        self.last_data_time = time.time()
 
         # 채널 인덱스가 아직 매핑되지 않은 경우 대기함
         if not self.eeg_channel_indices:
@@ -196,21 +271,51 @@ class MindSignalStreamer(Cortex):
                 "metrics": self.latest_met,
                 "time": formatted_time,
             }
-            self.r.publish(self.channel, json.dumps(payload))
+            try:
+                self.r.publish(self.channel, json.dumps(payload))
+            except (ConnectionError, TimeoutError, ConnectionResetError) as e:
+                logger.warning(f"Redis publish 실패 (CSV 저장은 계속): {e}")
 
             # 분석 완료 후 버퍼 초기화함 (비오버랩 방식)
             self.eeg_buffer = []
 
+    def _handle_sigterm(self, signum, frame):
+        """SIGTERM 수신 시 graceful shutdown 수행함"""
+        elapsed = time.time() - self.start_time
+        print(f"\nSIGTERM 수신됨. 측정 시간: {elapsed:.1f}초. 정리 시작함.")
+        try:
+            self.close_session()
+        except Exception as e:
+            logger.warning(f"close_session 실패 (무시): {e}")
+        finally:
+            self.close()
+
     def auto_stop(self):
-        print(f"\n{self.duration_min}분이 경과하여 측정을 자동으로 종료함.")
-        self.close()
+        elapsed = time.time() - self.start_time
+        print(
+            f"\n{self.duration_min}분이 경과하여 측정을 자동으로 종료함."
+            f" (실제 측정 시간: {elapsed:.1f}초)"
+        )
+        try:
+            self.close_session()
+        except Exception as e:
+            logger.warning(f"close_session 실패 (무시): {e}")
+        finally:
+            self.close()
 
     def on_inform_error(self, *args, **kwargs):
         error_data = kwargs.get("error_data")
         print(f"에러 발생함: {error_data}")
-        self.close()  # 에러 발생 시 프로세스 정상 종료 보장함
+        try:
+            self.close_session()
+        except Exception as e:
+            logger.warning(f"close_session 실패 (무시): {e}")
+        finally:
+            self.close()
 
     def on_close(self, *args, **kwargs):
+        self._watchdog_active = False
+        elapsed = time.time() - self.start_time if hasattr(self, "start_time") else 0
         if hasattr(self, "csv_file") and not self.csv_file.closed:
             self.csv_file.close()
-        print("프로그램이 안전하게 종료되었음.")
+        print(f"프로그램이 안전하게 종료되었음. (총 측정 시간: {elapsed:.1f}초)")
