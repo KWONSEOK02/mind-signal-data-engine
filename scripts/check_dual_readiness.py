@@ -46,10 +46,11 @@ class DiagnosticCortex(Cortex):
         self.headset_list_result = None
         self._diag_done = threading.Event()
 
-    def get_handler(self, req_id):
+    def _get_result_handler(self, req_id):
+        """SDK 디스패치 테이블에 getLicenseInfo 핸들러 등록함"""
         if req_id == GET_LICENSE_INFO_ID:
             return self._handle_get_license_info
-        return super().get_handler(req_id)
+        return super()._get_result_handler(req_id)
 
     def get_license_info(self):
         """getLicenseInfo JSON-RPC 호출 수행함"""
@@ -64,13 +65,16 @@ class DiagnosticCortex(Cortex):
     def _handle_get_license_info(self, result_dic):
         """getLicenseInfo 응답 처리함"""
         self.license_info = result_dic
-        self._diag_done.set()
+        if self.headset_list_result is not None:
+            self._diag_done.set()
 
     def _handle_authorize(self, result_dic):
-        """authorize 성공 후 getLicenseInfo 호출함 (세션 생성 안 함)"""
+        """authorize 성공 후 getLicenseInfo + queryHeadsets 호출함"""
         print("[OK] Authorize 성공함.")
         self.auth = result_dic["cortexToken"]
+        # 부모 상태 보존 후 추가 호출 수행함
         self.get_license_info()
+        self.refresh_headset_list()
         self.query_headset()
 
     def _handle_query_headset(self, result_dic):
