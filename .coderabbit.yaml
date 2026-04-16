@@ -1,0 +1,28 @@
+language: ko-KR
+tone_instructions: "객관적이고 전문적인 시니어 소프트웨어 엔지니어의 톤을 유지하세요. 포매팅이나 라인 길이 같은 사소한 스타일 이슈는 지적하지 말고, 시스템 아키텍처와 논리 결함 탐지에 집중하세요."
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - dev
+  ignore_formatting: true
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        1. Fail-Fast 원칙: 예외를 조용히 넘기지(bare except/pass) 않고 명시적으로 raise하는지 확인.
+        2. 타입 안정성: typing 명시 누락, Any 타입 남용 지적.
+        3. EEG 데이터 처리: numpy/scipy 연산에서 NaN/Inf 방어 로직 존재 여부.
+        4. Redis 연결: retry 로직과 graceful disconnect 확인.
+        5. 포매팅(스타일) 무시 — 포매터가 통제하므로 리뷰 코멘트 불필요.
+    - path: "tests/**/*.py"
+      instructions: |
+        엣지 케이스 커버리지: 경계값 조건과 예외 상황 시나리오가 충분히 커버되었는지 점검.
+        포매팅 무시.
+chat:
+  auto_reply: true
