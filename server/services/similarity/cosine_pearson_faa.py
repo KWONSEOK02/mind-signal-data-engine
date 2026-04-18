@@ -22,25 +22,69 @@ class CosinePearsonFAAStrategy(SimilarityStrategy):
             "faa_mean": float | None,
           }
           b = same
+
+        Raises:
+            ValueError: waves_mean에 필수 대역이 누락된 경우
+            ValueError: waves_mean에 NaN 또는 Inf 값이 포함된 경우
         """
-        # 1) 대역별 5-요소 벡터의 코사인 유사도 계산함
         band_order = ["delta", "theta", "alpha", "beta", "gamma"]
-        vec_a = np.array([a["waves_mean"][band] for band in band_order])
-        vec_b = np.array([b["waves_mean"][band] for band in band_order])
+
+        # 0) 필수 대역 존재 여부 검증 수행함
+        waves_a = a.get("waves_mean", {})
+        waves_b = b.get("waves_mean", {})
+        missing_a = [band for band in band_order if band not in waves_a]
+        missing_b = [band for band in band_order if band not in waves_b]
+        if missing_a or missing_b:
+            raise ValueError(
+                f"Missing bands in waves_mean: "
+                f"subject_a={missing_a}, subject_b={missing_b}. "
+                f"Expected all of {band_order}."
+            )
+
+        # 1) 대역별 5-요소 벡터 구성 수행함
+        vec_a = np.array([waves_a[band] for band in band_order], dtype=float)
+        vec_b = np.array([waves_b[band] for band in band_order], dtype=float)
+
+        # NaN/Inf 방어 검증 수행함
+        if np.any(np.isnan(vec_a)) or np.any(np.isnan(vec_b)):
+            raise ValueError(
+                "NaN detected in waves_mean — "
+                "likely data quality issue (empty session or filter divergence)"
+            )
+        if np.any(np.isinf(vec_a)) or np.any(np.isinf(vec_b)):
+            raise ValueError(
+                "Inf detected in waves_mean — likely filter divergence"
+            )
+
+        # 영벡터 방어 처리 — 진짜 빈 데이터와 직교를 구별함
+        norm_a = np.linalg.norm(vec_a)
+        norm_b = np.linalg.norm(vec_b)
+        if norm_a < 1e-12 or norm_b < 1e-12:
+            return {
+                "algorithm": self.name,
+                "similarity_score": None,
+                "overall_cosine": None,
+                "band_ratio_diff": {band: 0.0 for band in band_order},
+                "faa_absolute_diff": None,
+                "degraded": True,
+                "degraded_reason": "zero_norm",
+            }
+
+        # 2) 코사인 유사도 계산 수행함
         overall_cosine = self._cosine(vec_a, vec_b)
 
         # 개별 대역 파워 절대 차이 계산함 (추가 진단 정보)
         band_ratio_diff = {
-            band: abs(a["waves_mean"][band] - b["waves_mean"][band])
+            band: abs(waves_a[band] - waves_b[band])
             for band in band_order
         }
 
-        # 2) FAA 절대 차이 계산함 (scalar 차이, 시계열 없으므로 피어슨 상관 제외)
+        # 3) FAA 절대 차이 계산함 (scalar 차이, 시계열 없으므로 피어슨 상관 제외)
         faa_diff = None
         if a.get("faa_mean") is not None and b.get("faa_mean") is not None:
             faa_diff = abs(a["faa_mean"] - b["faa_mean"])
 
-        # 3) overall similarity_score 정규화 (0~1 범위)
+        # 4) overall similarity_score 정규화 (0~1 범위)
         similarity_score = self._normalize(overall_cosine, faa_diff)
 
         return {
@@ -60,10 +104,12 @@ class CosinePearsonFAAStrategy(SimilarityStrategy):
     def _normalize(self, cosine: float, faa_diff: float | None) -> float:
         """cosine 유사도를 0~1로 정규화하고 FAA 차이 감점을 적용함.
 
+        대역 파워는 음수가 없으므로 cosine ∈ [0, 1]. (cosine+1)/2 매핑은
+        직교(cosine=0)를 0.5로 올려 의미가 왜곡되므로 직접 사용함.
         FAA 차이가 클수록 유사도 감소 (단순 선형 감점, 교수 면담 후 가중치 조정 가능).
         """
-        # cosine은 -1~1 범위. 0~1로 정규화함
-        score = (cosine + 1) / 2
+        # 대역 파워는 비음수 → cosine ∈ [0, 1]. 직접 clamp 적용함
+        score = max(0.0, cosine)
 
         # FAA 차이 클수록 유사도 감소 (faa_diff 2 이상 시 최대 50% 감점)
         if faa_diff is not None:

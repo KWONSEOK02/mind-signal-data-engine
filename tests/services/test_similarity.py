@@ -161,3 +161,131 @@ class TestCosinePearsonFAAStrategy:
         result = compute(identical_subject, identical_subject)
         expected_bands = {"delta", "theta", "alpha", "beta", "gamma"}
         assert set(result["band_ratio_diff"].keys()) == expected_bands
+
+    def test_missing_band_raises_value_error(self):
+        """waves_mean에 대역 누락 시 ValueError 발생함"""
+        from server.services.similarity import compute
+
+        a = {
+            "waves_mean": {
+                "delta": 0.5,
+                "theta": 0.3,
+                # alpha 누락
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        b = {
+            "waves_mean": {
+                "delta": 0.5,
+                "theta": 0.3,
+                "alpha": 0.8,
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        with pytest.raises(ValueError, match="Missing bands in waves_mean"):
+            compute(a, b)
+
+    def test_nan_in_waves_mean_raises_value_error(self):
+        """waves_mean에 NaN 포함 시 ValueError 발생함"""
+        from server.services.similarity import compute
+
+        a = {
+            "waves_mean": {
+                "delta": float("nan"),
+                "theta": 0.3,
+                "alpha": 0.8,
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        b = {
+            "waves_mean": {
+                "delta": 0.5,
+                "theta": 0.3,
+                "alpha": 0.8,
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        with pytest.raises(ValueError, match="NaN detected in waves_mean"):
+            compute(a, b)
+
+    def test_inf_in_waves_mean_raises_value_error(self):
+        """waves_mean에 Inf 포함 시 ValueError 발생함"""
+        from server.services.similarity import compute
+
+        a = {
+            "waves_mean": {
+                "delta": float("inf"),
+                "theta": 0.3,
+                "alpha": 0.8,
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        b = {
+            "waves_mean": {
+                "delta": 0.5,
+                "theta": 0.3,
+                "alpha": 0.8,
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        with pytest.raises(ValueError, match="Inf detected in waves_mean"):
+            compute(a, b)
+
+    def test_zero_vector_returns_none_similarity_score_and_degraded(self):
+        """모든 대역=0인 영벡터 → similarity_score=None + degraded=True 반환함"""
+        from server.services.similarity import compute
+
+        zero_subject = {
+            "waves_mean": {
+                "delta": 0.0,
+                "theta": 0.0,
+                "alpha": 0.0,
+                "beta": 0.0,
+                "gamma": 0.0,
+            },
+            "faa_mean": None,
+        }
+        normal_subject = {
+            "waves_mean": {
+                "delta": 0.5,
+                "theta": 0.3,
+                "alpha": 0.8,
+                "beta": 0.4,
+                "gamma": 0.2,
+            },
+            "faa_mean": None,
+        }
+        result = compute(zero_subject, normal_subject)
+        assert result["similarity_score"] is None
+        assert result["degraded"] is True
+        assert result["degraded_reason"] == "zero_norm"
+
+    def test_orthogonal_score_zero_not_half(
+        self, alpha_only_subject, beta_only_subject
+    ):
+        """직교 벡터 → similarity_score=0.0 (이전 (cosine+1)/2 매핑의 0.5 아님)"""
+        from server.services.similarity import compute
+
+        result = compute(alpha_only_subject, beta_only_subject)
+        assert abs(result["similarity_score"]) < 1e-9
+
+    def test_identical_vectors_score_near_one_with_new_normalize(
+        self, identical_subject
+    ):
+        """동일 벡터 → max(0, cosine) 매핑에서도 similarity_score ≈ 1.0"""
+        from server.services.similarity import compute
+
+        result = compute(identical_subject, identical_subject)
+        assert result["similarity_score"] >= 0.95

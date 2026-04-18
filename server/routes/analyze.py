@@ -115,6 +115,7 @@ async def analyze_pipeline(
 
         seq_result = analyze_pipeline_sequential(
             group_id=body.group_id,
+            subject_indices=body.subject_indices,
             algorithm=body.algorithm,
         )
         # SEQUENTIAL 응답: BE는 similarity_features 사용, subjects는 빈 리스트 반환함

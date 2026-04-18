@@ -181,6 +181,7 @@ def compute_session_analysis(group_id: str, subject_indices: list[int]) -> dict:
 
 def analyze_pipeline_sequential(
     group_id: str,
+    subject_indices: list[int],
     algorithm: str = "default",
 ) -> dict:
     """SEQUENTIAL 모드 분석 파이프라인을 실행함.
@@ -188,20 +189,37 @@ def analyze_pipeline_sequential(
     두 피실험자를 시분할로 측정한 CSV를 로드하여 반응 유사도를 계산함.
     FAA는 raw EEG 채널 배열이 필요하므로 초기 버전에서는 None으로 처리함 (RR3).
     pair_features / y_score / synchrony_score는 DUAL 전용이므로 None 반환함.
+
+    Args:
+        group_id: 그룹 식별자
+        subject_indices: 정확히 2명의 피실험자 인덱스 목록 (예: [1, 2], [3, 4])
+        algorithm: 유사도 알고리즘 식별자
+
+    Raises:
+        ValueError: subject_indices가 정확히 2개가 아닌 경우
     """
-    # 1. Subject 1 CSV 로드 수행함
-    csv_files_a = find_csv_files(group_id, subject_index=1)
+    # 입력 검증 — SEQUENTIAL 모드는 정확히 2명 필요함
+    if len(subject_indices) != 2:
+        raise ValueError(
+            f"SEQUENTIAL mode requires exactly 2 subject_indices, "
+            f"got {len(subject_indices)}"
+        )
+
+    idx_a, idx_b = subject_indices[0], subject_indices[1]
+
+    # 1. Subject A CSV 로드 수행함
+    csv_files_a = find_csv_files(group_id, subject_index=idx_a)
     if not csv_files_a:
         raise ValueError(
-            f"group_id={group_id} subject_index=1 CSV 미발견"
+            f"group_id={group_id} subject_index={idx_a} CSV 미발견"
         )
     df_a = load_session_data(csv_files_a[0])
 
-    # 2. Subject 2 CSV 로드 수행함
-    csv_files_b = find_csv_files(group_id, subject_index=2)
+    # 2. Subject B CSV 로드 수행함
+    csv_files_b = find_csv_files(group_id, subject_index=idx_b)
     if not csv_files_b:
         raise ValueError(
-            f"group_id={group_id} subject_index=2 CSV 미발견"
+            f"group_id={group_id} subject_index={idx_b} CSV 미발견"
         )
     df_b = load_session_data(csv_files_b[0])
 
@@ -221,8 +239,8 @@ def analyze_pipeline_sequential(
     return {
         "group_id": group_id,
         "subjects": [
-            {"subject_index": 1, **summary_a},
-            {"subject_index": 2, **summary_b},
+            {"subject_index": idx_a, **summary_a},
+            {"subject_index": idx_b, **summary_b},
         ],
         "similarity_features": similarity_features,
         "pair_features": None,   # DUAL 전용 필드
