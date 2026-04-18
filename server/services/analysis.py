@@ -175,6 +175,63 @@ def compute_session_analysis(group_id: str, subject_indices: list[int]) -> dict:
 
 
 # ──────────────────────────────────────────────
+# SEQUENTIAL 모드 파이프라인
+# ──────────────────────────────────────────────
+
+
+def analyze_pipeline_sequential(
+    group_id: str,
+    algorithm: str = "default",
+) -> dict:
+    """SEQUENTIAL 모드 분석 파이프라인을 실행함.
+
+    두 피실험자를 시분할로 측정한 CSV를 로드하여 반응 유사도를 계산함.
+    FAA는 raw EEG 채널 배열이 필요하므로 초기 버전에서는 None으로 처리함 (RR3).
+    pair_features / y_score / synchrony_score는 DUAL 전용이므로 None 반환함.
+    """
+    # 1. Subject 1 CSV 로드 수행함
+    csv_files_a = find_csv_files(group_id, subject_index=1)
+    if not csv_files_a:
+        raise ValueError(
+            f"group_id={group_id} subject_index=1 CSV 미발견"
+        )
+    df_a = load_session_data(csv_files_a[0])
+
+    # 2. Subject 2 CSV 로드 수행함
+    csv_files_b = find_csv_files(group_id, subject_index=2)
+    if not csv_files_b:
+        raise ValueError(
+            f"group_id={group_id} subject_index=2 CSV 미발견"
+        )
+    df_b = load_session_data(csv_files_b[0])
+
+    # 3. compute_subject_summary로 waves_mean 확보함 (N2: run_full_pipeline 대신)
+    summary_a = compute_subject_summary(df_a)
+    summary_b = compute_subject_summary(df_b)
+
+    # 4. Scalar 기반 input contract 구성함 (I6: faa_mean=None 초기 처리)
+    a_data = {"waves_mean": summary_a["waves_mean"], "faa_mean": None}
+    b_data = {"waves_mean": summary_b["waves_mean"], "faa_mean": None}
+
+    # 5. Strategy 호출하여 유사도 계산 수행함
+    from server.services.similarity import compute as compute_similarity
+
+    similarity_features = compute_similarity(a_data, b_data, algorithm=algorithm)
+
+    return {
+        "group_id": group_id,
+        "subjects": [
+            {"subject_index": 1, **summary_a},
+            {"subject_index": 2, **summary_b},
+        ],
+        "similarity_features": similarity_features,
+        "pair_features": None,   # DUAL 전용 필드
+        "y_score": None,         # DUAL 전용 필드
+        "synchrony_score": None,  # DUAL 전용 필드 (ADR-14-004)
+    }
+
+
+# ──────────────────────────────────────────────
 # 파이프라인 단계별 함수 (알고리즘 명세 기반)
 # ──────────────────────────────────────────────
 

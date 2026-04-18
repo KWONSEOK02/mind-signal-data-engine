@@ -108,7 +108,27 @@ async def analyze_pipeline(
             status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임"
         )
 
-    # 2. 전체 파이프라인 실행함
+    # 2. 모드별 파이프라인 분기 실행함
+    if body.mode == "SEQUENTIAL":
+        # SEQUENTIAL 모드: 시분할 측정 결과의 반응 유사도 계산 수행함
+        from server.services.analysis import analyze_pipeline_sequential
+
+        seq_result = analyze_pipeline_sequential(
+            group_id=body.group_id,
+            algorithm=body.algorithm,
+        )
+        # SEQUENTIAL 응답: BE는 similarity_features 사용, subjects는 빈 리스트 반환함
+        return PipelineResponse(
+            group_id=body.group_id,
+            subjects=[],
+            similarity_features=seq_result["similarity_features"],
+            pair_features=None,
+            y_score=None,
+            synchrony_score=None,
+            pipeline_params={},
+        )
+
+    # DUAL / BTI → 기존 파이프라인 실행함 (변경 없음)
     from server.services.analysis import run_full_pipeline
 
     result = run_full_pipeline(
@@ -135,9 +155,10 @@ async def analyze_pipeline(
             md_sections.append(dataframe_to_markdown(result["dataframes"]))
         # Feature 매트릭스 Markdown
         for subj in result.get("subjects", []):
-            md_sections.append(
-                features_to_markdown(subj["subject_index"], subj["features"])
-            )
+            if "features" in subj:
+                md_sections.append(
+                    features_to_markdown(subj["subject_index"], subj["features"])
+                )
         result["markdown"] = "\n\n---\n\n".join(md_sections)
 
     # dataframes는 응답에서 제외함

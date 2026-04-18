@@ -184,12 +184,34 @@ class TestAnalyzePipelineModeField:
         )
         assert response.status_code == 200
 
-    @patch("server.services.analysis.run_full_pipeline")
+    @patch("server.services.analysis.analyze_pipeline_sequential")
     def test_mode_sequential_accepted(
-        self, mock_pipeline, test_client, pipeline_secret_header, valid_pipeline_result
+        self,
+        mock_seq_pipeline,
+        test_client,
+        pipeline_secret_header,
     ):
         """mode=SEQUENTIAL body → 422 없이 요청 수락함"""
-        mock_pipeline.return_value = valid_pipeline_result
+        mock_seq_pipeline.return_value = {
+            "group_id": TEST_GROUP_ID,
+            "subjects": [],
+            "similarity_features": {
+                "algorithm": "cosine_pearson_faa",
+                "similarity_score": 0.8,
+                "overall_cosine": 0.6,
+                "band_ratio_diff": {
+                    "delta": 0.1,
+                    "theta": 0.2,
+                    "alpha": 0.05,
+                    "beta": 0.15,
+                    "gamma": 0.1,
+                },
+                "faa_absolute_diff": None,
+            },
+            "pair_features": None,
+            "y_score": None,
+            "synchrony_score": None,
+        }
         response = test_client.post(
             "/api/analyze/pipeline",
             json={
@@ -199,9 +221,10 @@ class TestAnalyzePipelineModeField:
             },
             headers=pipeline_secret_header,
         )
-        # SEQUENTIAL 분기에서 mock이 적절히 처리되면 200, 아니면 500 허용
-        # 중요한 것은 422(validation error)가 아니어야 함
-        assert response.status_code != 422
+        # SEQUENTIAL 분기에서 올바르게 처리되면 200 반환함
+        assert response.status_code == 200
+        data = response.json()
+        assert data["similarity_features"] is not None
 
     def test_mode_invalid_returns_422(
         self, test_client, pipeline_secret_header
