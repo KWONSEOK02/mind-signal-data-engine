@@ -1,8 +1,6 @@
 """파이프라인 테스트 공통 fixture 정의함"""
 
 from collections import OrderedDict
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd

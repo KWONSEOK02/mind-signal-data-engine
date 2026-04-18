@@ -1,7 +1,5 @@
 """markdown 서비스 features_to_markdown 함수 단위 테스트 수행함"""
 
-import pytest
-
 from server.services.markdown import features_to_markdown
 
 
@@ -26,7 +24,7 @@ class TestFeaturesToMarkdown:
         """파이프(|) 구분자 기반 테이블 행 존재함"""
         result = features_to_markdown(1, sample_features)
         lines = result.split("\n")
-        pipe_lines = [l for l in lines if "|" in l]
+        pipe_lines = [line for line in lines if "|" in line]
         assert len(pipe_lines) > 0
 
     def test_band_names_in_header(self, sample_features):
@@ -39,7 +37,7 @@ class TestFeaturesToMarkdown:
         """데이터 행이 '| W' 형태로 시작함"""
         result = features_to_markdown(1, sample_features)
         lines = result.split("\n")
-        w_lines = [l for l in lines if l.strip().startswith("| W")]
+        w_lines = [line for line in lines if line.strip().startswith("| W")]
         assert len(w_lines) > 0
 
     def test_feature_count_footer(self, sample_features):
