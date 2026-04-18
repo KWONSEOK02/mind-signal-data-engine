@@ -26,7 +26,9 @@ def dataframe_to_markdown(dataframes: dict[int, pd.DataFrame]) -> str:
 
         if available_metrics:
             sections.append("### Performance Metrics (평균)")
-            summary = df[available_metrics].describe().loc[["mean", "std", "min", "max"]]
+            summary = (
+                df[available_metrics].describe().loc[["mean", "std", "min", "max"]]
+            )
             sections.append(summary.to_markdown(floatfmt=".4f"))
 
         if available_waves:

@@ -26,7 +26,9 @@ async def stream_start(
 ):
     """core.main을 spawn하여 EEG 스트리밍 시작함"""
     if x_engine_secret != settings.engine_secret_key:
-        raise HTTPException(status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임")
+        raise HTTPException(
+            status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임"
+        )
 
     try:
         result = start_stream(body.group_id, body.subject_index)
@@ -43,7 +45,9 @@ async def stream_stop(
 ):
     """실행 중인 EEG 스트리밍 종료함"""
     if x_engine_secret != settings.engine_secret_key:
-        raise HTTPException(status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임")
+        raise HTTPException(
+            status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임"
+        )
 
     try:
         result = stop_stream(body.group_id, body.subject_index)
@@ -59,6 +63,8 @@ async def stream_status(
 ):
     """모든 스트리밍 프로세스 상태 조회함"""
     if x_engine_secret != settings.engine_secret_key:
-        raise HTTPException(status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임")
+        raise HTTPException(
+            status_code=403, detail="인증 실패: 유효하지 않은 시크릿 키임"
+        )
 
     return get_all_status()

@@ -1,6 +1,3 @@
-from pathlib import Path
-
-import pandas as pd
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 

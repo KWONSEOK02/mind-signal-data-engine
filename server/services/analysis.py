@@ -1,14 +1,66 @@
+import os
 from collections import OrderedDict
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from core.analyzer import MindSignalAnalyzer
-from server.config import settings
 
 # CSV 저장 기본 경로 (streamer.py와 동일한 위치)
 CSV_BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "csv"
+
+# 측정 진정 구간 — 분석 제외, 표시만 함
+TRIM_START_SECONDS = 15
+TRIM_END_SECONDS = 15
+
+# 최소 분석 가능 시간 (trimming 후 유효 구간 기준, 임시값 — 교수 확인 후 확정)
+MIN_ANALYSIS_SECONDS = int(os.getenv("MIN_ANALYSIS_SECONDS", 180))
+
+
+def classify_session_tier(total_samples: int) -> str:
+    """측정 시간 기반 세션 tier를 분류함 (1행 = 1초 가정)
+
+    Returns:
+        "VALID" — 유효 구간 ≥ MIN_ANALYSIS_SECONDS
+        "PARTIAL" — trimming 후 > 0초, < MIN
+        "ABORTED" — trimming 후 ≤ 0초
+    """
+    effective = total_samples - TRIM_START_SECONDS - TRIM_END_SECONDS
+    if effective >= MIN_ANALYSIS_SECONDS:
+        return "VALID"
+    elif effective > 0:
+        return "PARTIAL"
+    else:
+        return "ABORTED"
+
+
+def trim_dataframe(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """진정 구간 trimming 수행함
+
+    Returns:
+        (trimmed_df, baseline_df)
+        - trimmed_df: 유효 분석 구간 (시작 15초 ~ 종료-15초)
+        - baseline_df: 시작 15초 구간 (기저 뇌파 참조용)
+    """
+    total = len(df)
+    end_trim = max(0, total - TRIM_END_SECONDS)
+
+    baseline_df = df.iloc[:TRIM_START_SECONDS].copy()
+    trimmed_df = df.iloc[TRIM_START_SECONDS:end_trim].copy().reset_index(drop=True)
+
+    return trimmed_df, baseline_df
+
+
+def compute_baseline_from_warmup(
+    baseline_df: pd.DataFrame,
+    band_cols: list[str],
+) -> dict[str, float]:
+    """시작 15초 진정 구간에서 기저 뇌파 평균을 추출함"""
+    result = {}
+    for band in band_cols:
+        if band in baseline_df.columns:
+            result[band] = float(baseline_df[band].mean())
+    return result
 
 
 def find_csv_files(group_id: str, subject_index: int) -> list[Path]:
@@ -25,7 +77,7 @@ def load_session_data(csv_path: Path) -> pd.DataFrame:
 
 
 def compute_subject_summary(df: pd.DataFrame) -> dict:
-    """단일 피실험자의 세션 요약 통계를 계산함"""
+    """단일 피실험자의 세션 요약 통계를 계산함 (trimming 적용)"""
     metric_cols = [
         "focus",
         "engagement",
@@ -36,34 +88,58 @@ def compute_subject_summary(df: pd.DataFrame) -> dict:
     ]
     wave_cols = ["delta", "theta", "alpha", "beta", "gamma"]
 
+    total_samples = len(df)
+    tier = classify_session_tier(total_samples)
+
+    # trimming 적용 — 유효 구간과 baseline 분리함
+    trimmed_df, baseline_df = trim_dataframe(df)
+    baseline_warmup = compute_baseline_from_warmup(baseline_df, wave_cols)
+
+    # 유효 구간 기준 통계 계산함
+    analysis_df = trimmed_df if len(trimmed_df) > 0 else df
+
     summary = {
         "metrics_mean": {
-            col: float(df[col].mean()) for col in metric_cols if col in df.columns
+            col: float(analysis_df[col].mean())
+            for col in metric_cols
+            if col in analysis_df.columns
         },
         "metrics_std": {
-            col: float(df[col].std()) for col in metric_cols if col in df.columns
+            col: float(analysis_df[col].std())
+            for col in metric_cols
+            if col in analysis_df.columns
         },
         "waves_mean": {
-            col: float(df[col].mean()) for col in wave_cols if col in df.columns
+            col: float(analysis_df[col].mean())
+            for col in wave_cols
+            if col in analysis_df.columns
         },
-        "total_samples": len(df),
-        "duration_seconds": len(df),  # 1초당 1샘플
+        "total_samples": total_samples,
+        "effective_samples": len(trimmed_df),
+        "duration_seconds": total_samples,
+        "effective_duration_seconds": len(trimmed_df),
+        "tier": tier,
+        "baseline_warmup": baseline_warmup,
     }
     return summary
 
 
 def compute_synchrony(df1: pd.DataFrame, df2: pd.DataFrame) -> float | None:
-    """두 피실험자 간 뇌파 동기화 점수를 계산함"""
+    """두 피실험자 간 뇌파 동기화 점수를 계산함 (trimming 적용)"""
     analyzer = MindSignalAnalyzer()
 
+    # trimming 적용 — 진정 구간 제외한 유효 구간만 사용함
+    trimmed1, _ = trim_dataframe(df1)
+    trimmed2, _ = trim_dataframe(df2)
+
     # 공통 길이로 맞춤
-    min_len = min(len(df1), len(df2))
+    min_len = min(len(trimmed1), len(trimmed2))
     if min_len < 10:
         return None
 
     # alpha 대역 기준 동기화 계산 수행함
-    alpha1 = df1["alpha"].values[:min_len]
-    alpha2 = df2["alpha"].values[:min_len]
+    alpha1 = trimmed1["alpha"].values[:min_len]
+    alpha2 = trimmed2["alpha"].values[:min_len]
 
     return float(analyzer.calculate_synchrony(alpha1, alpha2))
 
