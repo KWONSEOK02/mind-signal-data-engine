@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
@@ -68,6 +70,8 @@ class PipelineRequest(BaseModel):
     params: PipelineParams = PipelineParams()
     satisfaction_scores: dict[int, float] | None = None  # {1: 7.5, 2: 6.0}
     include_markdown: bool = False
+    mode: Literal["DUAL", "SEQUENTIAL", "BTI"] = "DUAL"  # 실험 모드 선택
+    algorithm: str = "default"  # SEQUENTIAL 전용 유사도 알고리즘 선택
 
 
 class SubjectFeatureResult(BaseModel):
@@ -89,6 +93,7 @@ class PipelineResponse(BaseModel):
     synchrony_score: float | None = None
     pipeline_params: dict
     markdown: str | None = None
+    similarity_features: dict | None = None  # SEQUENTIAL 모드 전용 유사도 결과
 
 
 @router.post("/analyze/pipeline")
