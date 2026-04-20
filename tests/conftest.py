@@ -1,8 +1,6 @@
 """파이프라인 테스트 공통 fixture 정의함"""
 
 from collections import OrderedDict
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -113,7 +111,9 @@ def valid_pipeline_result():
             "baseline_duration_sec": BASELINE_ROWS,
             "band_cols": DEFAULT_BAND_COLS,
             "n_windows_per_stimulus": N_WINDOWS,
-            "total_features_per_subject": N_STIMULI * N_WINDOWS * len(DEFAULT_BAND_COLS),
+            "total_features_per_subject": (
+                N_STIMULI * N_WINDOWS * len(DEFAULT_BAND_COLS)
+            ),
         },
         "dataframes": {},
     }
