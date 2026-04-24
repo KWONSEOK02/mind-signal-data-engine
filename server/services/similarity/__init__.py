@@ -1,5 +1,5 @@
-from ._registry import REGISTRY, get
 from . import cosine_pearson_faa  # noqa: F401 — 등록 트리거
+from ._registry import REGISTRY, get
 
 
 def compute(

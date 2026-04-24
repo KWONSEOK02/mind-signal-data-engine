@@ -70,7 +70,7 @@ class PipelineRequest(BaseModel):
     params: PipelineParams = PipelineParams()
     satisfaction_scores: dict[int, float] | None = None  # {1: 7.5, 2: 6.0}
     include_markdown: bool = False
-    mode: Literal["DUAL", "SEQUENTIAL", "BTI"] = "DUAL"  # 실험 모드 선택
+    mode: Literal["DUAL", "SEQUENTIAL", "BTI", "DUAL_2PC"] = "DUAL"  # 실험 모드 선택
     algorithm: str = "default"  # SEQUENTIAL 전용 유사도 알고리즘 선택
 
 
@@ -127,6 +127,32 @@ async def analyze_pipeline(
             y_score=None,
             synchrony_score=None,
             pipeline_params={},
+        )
+
+    elif body.mode == "DUAL_2PC":
+        # v7 C-1: DUAL_2PC는 기존 run_full_pipeline 재활용 (DUAL/BTI와 동일 입력 구조)
+        # BE가 두 subject 각각의 CSV를 정렬된 상태로 업로드하므로 subject_indices=[1,2] 전달
+        from server.services.analysis import run_full_pipeline
+
+        result = run_full_pipeline(
+            group_id=body.group_id,
+            subject_indices=body.subject_indices,  # BE가 [1, 2]로 전달
+            stimulus_duration_sec=body.params.stimulus_duration_sec,
+            window_size_sec=body.params.window_size_sec,
+            n_stimuli=body.params.n_stimuli,
+            baseline_duration_sec=body.params.baseline_duration_sec,
+            band_cols=body.params.band_cols,
+            satisfaction_scores=body.satisfaction_scores,
+        )
+        # mode 메타데이터 응답 포함 (FE 구분용)
+        return PipelineResponse(
+            group_id=body.group_id,
+            subjects=result["subjects"],
+            pair_features=result.get("pair_features"),
+            y_score=result.get("y_score"),
+            synchrony_score=result.get("synchrony_score"),
+            pipeline_params=result.get("pipeline_params", {}),
+            similarity_features={"mode": "DUAL_2PC"},  # 메타데이터
         )
 
     # DUAL / BTI → 기존 파이프라인 실행함 (변경 없음)

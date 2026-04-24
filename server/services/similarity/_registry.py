@@ -1,3 +1,5 @@
+# DUAL_2PC strategy는 신규 파일 불필요. cosine_pearson_faa.compute(a, b) 재활용.
+# FastAPI 라우터(analyze.py)에서 mode 분기만 수행. Phase 16.
 from typing import Type
 
 from ._base import SimilarityStrategy
