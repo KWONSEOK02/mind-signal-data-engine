@@ -112,6 +112,24 @@ async def test_lifespan_pending_shutdown_no_crash(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_lifespan_empty_string_group_id_treated_as_pending(monkeypatch):
+    """분기 2 추가 케이스 — DUAL_2PC_GROUP_ID="" (빈 문자열)도 pending 처리함 (Phase 17.5.2)"""
+    monkeypatch.setattr(settings, "engine_secret_key", TEST_VALID_SECRET)
+    # pydantic이 `DUAL_2PC_GROUP_ID=` 빈 값을 ""로 파싱하는 케이스 재현함
+    monkeypatch.setattr(settings, "dual_2pc_group_id", "")
+    monkeypatch.setattr(settings, "dual_2pc_subject_index", 1)
+    monkeypatch.setattr(settings, "registration_mode", "local")
+    monkeypatch.setattr(settings, "lan_ip", "127.0.0.1")
+
+    mod = _import_fresh_app()
+    async with _run_lifespan(mod.app):
+        # 빈 문자열이면 pending 분기로 빠져야 함 — register-dual 호출 안 함
+        assert mod.app.state.registered_group_id is None
+        assert mod.app.state.heartbeat_task is None
+        assert mod.app.state.subject_index == 1
+
+
+@pytest.mark.asyncio
 async def test_lifespan_single_legacy_register(monkeypatch, httpx_mock):
     """분기 3 — 둘 다 없음 → SEQUENTIAL register + single heartbeat 확인함"""
     monkeypatch.setattr(settings, "engine_secret_key", TEST_VALID_SECRET)
