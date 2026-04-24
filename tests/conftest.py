@@ -132,11 +132,12 @@ def test_client():
 
     # settings 속성을 테스트용으로 오버라이드함
     original_secret = settings.engine_secret_key
-    original_ngrok = settings.use_ngrok
+    original_mode = settings.registration_mode
     settings.engine_secret_key = TEST_SECRET
-    settings.use_ngrok = False
+    settings.registration_mode = "local"  # 테스트는 ngrok tunnel 개방 금지
 
     from fastapi.testclient import TestClient
+
     from server.app import app
 
     client = TestClient(app)
@@ -144,4 +145,4 @@ def test_client():
 
     # 원래 값 복원함
     settings.engine_secret_key = original_secret
-    settings.use_ngrok = original_ngrok
+    settings.registration_mode = original_mode

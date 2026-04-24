@@ -52,9 +52,7 @@ class CosinePearsonFAAStrategy(SimilarityStrategy):
                 "likely data quality issue (empty session or filter divergence)"
             )
         if np.any(np.isinf(vec_a)) or np.any(np.isinf(vec_b)):
-            raise ValueError(
-                "Inf detected in waves_mean — likely filter divergence"
-            )
+            raise ValueError("Inf detected in waves_mean — likely filter divergence")
 
         # 영벡터 방어 처리 — 진짜 빈 데이터와 직교를 구별함
         norm_a = np.linalg.norm(vec_a)
@@ -75,8 +73,7 @@ class CosinePearsonFAAStrategy(SimilarityStrategy):
 
         # 개별 대역 파워 절대 차이 계산함 (추가 진단 정보)
         band_ratio_diff = {
-            band: abs(waves_a[band] - waves_b[band])
-            for band in band_order
+            band: abs(waves_a[band] - waves_b[band]) for band in band_order
         }
 
         # 3) FAA 절대 차이 계산함 (scalar 차이, 시계열 없으므로 피어슨 상관 제외)
@@ -97,9 +94,7 @@ class CosinePearsonFAAStrategy(SimilarityStrategy):
 
     def _cosine(self, a: np.ndarray, b: np.ndarray) -> float:
         """두 벡터의 코사인 유사도를 계산함"""
-        return float(
-            np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12)
-        )
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
 
     def _normalize(self, cosine: float, faa_diff: float | None) -> float:
         """cosine 유사도를 0~1로 정규화하고 FAA 차이 감점을 적용함.
