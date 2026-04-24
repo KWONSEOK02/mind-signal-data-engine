@@ -9,10 +9,13 @@
 """
 
 import argparse
+import asyncio
 import math
 import time
+from contextlib import asynccontextmanager
 from typing import Literal
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -39,6 +42,24 @@ _parser.add_argument(
     default="change-me-in-production",
     help="X-Engine-Secret 헤더 검증용 시크릿 키",
 )
+_parser.add_argument(
+    "--backend-url",
+    type=str,
+    default="http://localhost:5000",
+    help="BE /register-dual 대상 URL",
+)
+_parser.add_argument(
+    "--group-id",
+    type=str,
+    default=None,
+    help="DUAL_2PC groupId. 지정 시 startup hook에서 /register-dual 호출",
+)
+_parser.add_argument(
+    "--register-retry-max",
+    type=int,
+    default=10,
+    help="BE 미기동 상태 대비 retry 횟수 (1초 간격)",
+)
 _args, _ = _parser.parse_known_args()
 
 # ──────────────────────────────────────────────
@@ -49,12 +70,60 @@ _current_group_id: str | None = None  # 활성 groupId
 _subject_index: int = _args.subject_index  # 이 인스턴스 담당 subjectIndex
 _secret_key: str = _args.engine_secret
 
+
+# ──────────────────────────────────────────────
+# FastAPI lifespan — startup 시 /register-dual 호출함
+# ──────────────────────────────────────────────
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """mock DE 부팅 시 BE /register-dual 호출함."""
+    if _args.group_id is None:
+        yield
+        return
+
+    public_url = f"http://localhost:{_args.port}"
+    payload = {
+        "groupId": _args.group_id,
+        "subjectIndex": _args.subject_index,
+        "engineUrl": public_url,
+        "secretKey": _args.engine_secret,
+    }
+    for attempt in range(_args.register_retry_max):
+        try:
+            async with httpx.AsyncClient(timeout=3) as client:
+                resp = await client.post(
+                    f"{_args.backend_url}/api/engine/register-dual",
+                    json=payload,
+                )
+                resp.raise_for_status()
+                print(
+                    f"[mock DE subject={_args.subject_index}] "
+                    f"register-dual OK: {resp.json()}"
+                )
+                break
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            if attempt < _args.register_retry_max - 1:
+                print(
+                    f"[mock DE subject={_args.subject_index}] "
+                    f"register-dual retry {attempt + 1}: {e}"
+                )
+                await asyncio.sleep(1)
+            else:
+                raise SystemExit(
+                    f"[mock DE subject={_args.subject_index}] "
+                    f"register-dual 실패 (max retry): {e}"
+                )
+
+    yield
+
+
 # ──────────────────────────────────────────────
 # FastAPI 앱 초기화
 # ──────────────────────────────────────────────
 app = FastAPI(
     title=f"Mind Signal Mock DE (subject {_subject_index})",
     version="mock-1.0.0",
+    lifespan=_lifespan,
 )
 
 
@@ -220,6 +289,35 @@ async def stream_status(
         "active": _stream_active,
         "group_id": _current_group_id,
     }
+
+
+# ──────────────────────────────────────────────
+# 엔드포인트 — Control (Playwright runtime groupId 주입용)
+# ──────────────────────────────────────────────
+class AssignGroupRequest(BaseModel):
+    group_id: str
+
+
+@app.post("/control/assign-group")
+async def assign_group(req: AssignGroupRequest):
+    """Playwright runtime groupId 주입 + /register-dual trigger 처리함."""
+    global _current_group_id
+    _current_group_id = req.group_id
+
+    public_url = f"http://localhost:{_args.port}"
+    payload = {
+        "groupId": req.group_id,
+        "subjectIndex": _args.subject_index,
+        "engineUrl": public_url,
+        "secretKey": _args.engine_secret,
+    }
+    async with httpx.AsyncClient(timeout=3) as client:
+        resp = await client.post(
+            f"{_args.backend_url}/api/engine/register-dual",
+            json=payload,
+        )
+        resp.raise_for_status()
+    return {"status": "registered", "groupId": req.group_id}
 
 
 # ──────────────────────────────────────────────
