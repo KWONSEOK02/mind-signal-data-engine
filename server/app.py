@@ -66,8 +66,9 @@ async def lifespan(app: FastAPI):
     app.state.heartbeat_task = None  # 분기 2는 미생성 → shutdown 가드용
     app.state.assign_lock = asyncio.Lock()
 
-    # 모드 판별
-    has_group_id = settings.dual_2pc_group_id is not None
+    # 모드 판별 — 빈 문자열("") env를 None과 동등하게 취급함 (Phase 17.5.2)
+    # pydantic이 `DUAL_2PC_GROUP_ID=` 빈 값을 ""로 파싱해 is not None 통과하는 버그 방지
+    has_group_id = bool(settings.dual_2pc_group_id)
     has_subject_index = settings.dual_2pc_subject_index is not None
 
     try:
