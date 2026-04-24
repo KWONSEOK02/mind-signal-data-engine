@@ -33,18 +33,28 @@ def _import_fresh_app():
 
 
 @pytest.mark.asyncio
-async def test_lifespan_placeholder_secret_aborts(monkeypatch):
-    """preflight hard-gate — placeholder secret 감지 시 SystemExit(1) 발생 확인함"""
+async def test_lifespan_placeholder_secret_warns_but_continues(
+    monkeypatch, httpx_mock, capsys
+):
+    """preflight soft-check — placeholder secret 경고 로그 출력 후 정상 기동 확인함 (Phase 17.5.1)"""
     monkeypatch.setattr(settings, "engine_secret_key", "your-shared-secret-here")
     monkeypatch.setattr(settings, "dual_2pc_group_id", None)
     monkeypatch.setattr(settings, "dual_2pc_subject_index", None)
+    monkeypatch.setattr(settings, "registration_mode", "local")
+    monkeypatch.setattr(settings, "lan_ip", "127.0.0.1")
 
-    mod = _import_fresh_app()
+    # SEQUENTIAL register 모의함
+    httpx_mock.add_response(url=BACKEND_URL, method="POST", status_code=200)
 
-    with pytest.raises(SystemExit) as exc_info:
+    with patch.object(webhook, "HEARTBEAT_INTERVAL_SEC", 3600):
+        mod = _import_fresh_app()
+        # placeholder 상태여도 lifespan abort 없이 정상 진입해야 함
         async with _run_lifespan(mod.app):
-            pass
-    assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "[WARN]" in captured.out
+            assert "placeholder" in captured.out
+            # 기동은 계속 진행됨
+            assert mod.app.state.assign_lock is not None
 
 
 @pytest.mark.asyncio

@@ -16,8 +16,10 @@ from server.services.webhook import (
 
 load_dotenv(".env.local")
 
-# Preflight hard-gate: ENGINE_SECRET_KEY가 placeholder면 lifespan 기동 차단함 (Phase 17.5)
-# placeholder 상태로 공개 ngrok URL에 /control/assign-group이 열리는 사고 방지
+# Preflight soft-check: ENGINE_SECRET_KEY가 placeholder면 WARNING 로그만 출력함
+# (Phase 17.5.1 — abort 제거). 실기기 테스트 등 placeholder 그대로 쓰다가 실험 후
+# 보완하는 흐름을 허용함. 공개 ngrok URL에 /control/assign-group 노출 리스크는
+# 경고로만 안내함
 PLACEHOLDER_SECRETS = {
     "your-shared-secret-here",
     "change-me-in-production",
@@ -36,13 +38,14 @@ async def lifespan(app: FastAPI):
        (heartbeat 미생성)
     3) 둘 다 없음 → SEQUENTIAL register + single heartbeat (backward-compat)
     """
-    # Preflight hard-gate: placeholder secret 감지 시 abort 수행함
+    # Preflight soft-check: placeholder secret 감지 시 WARNING만 출력함 (Phase 17.5.1)
     if settings.engine_secret_key in PLACEHOLDER_SECRETS:
         print(
-            f"DE startup aborted: ENGINE_SECRET_KEY is placeholder "
-            f"('{settings.engine_secret_key}'). 실제 값을 .env.local 또는 환경변수로 설정할 것."
+            "[WARN] ENGINE_SECRET_KEY가 placeholder 값임 "
+            f"('{settings.engine_secret_key}'). /control/assign-group이 "
+            "공개 ngrok URL에서 사실상 검증 없이 열림. 실기기 테스트 후 "
+            "실제 값으로 교체 권장함."
         )
-        raise SystemExit(1)
 
     # public_url 결정 (registration_mode 기반)
     if settings.registration_mode == "ngrok":
