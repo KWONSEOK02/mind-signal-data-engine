@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
 
         tunnel = ngrok.connect(settings.fastapi_port, bind_tls=True)
         public_url = tunnel.public_url
-        print(f"ngrok 퍼블릭 URL 발급됨: {public_url}")
+        print(f"ngrok 퍼블릭 URL 발급됨: {public_url}", flush=True)
     else:  # local
         lan_ip = settings.lan_ip or socket.gethostbyname(socket.gethostname())
         public_url = f"http://{lan_ip}:{settings.fastapi_port}"
