@@ -137,6 +137,7 @@ def test_client():
     settings.use_ngrok = False
 
     from fastapi.testclient import TestClient
+
     from server.app import app
 
     client = TestClient(app)

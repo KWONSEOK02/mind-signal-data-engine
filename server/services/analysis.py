@@ -210,17 +210,13 @@ def analyze_pipeline_sequential(
     # 1. Subject A CSV 로드 수행함
     csv_files_a = find_csv_files(group_id, subject_index=idx_a)
     if not csv_files_a:
-        raise ValueError(
-            f"group_id={group_id} subject_index={idx_a} CSV 미발견"
-        )
+        raise ValueError(f"group_id={group_id} subject_index={idx_a} CSV 미발견")
     df_a = load_session_data(csv_files_a[0])
 
     # 2. Subject B CSV 로드 수행함
     csv_files_b = find_csv_files(group_id, subject_index=idx_b)
     if not csv_files_b:
-        raise ValueError(
-            f"group_id={group_id} subject_index={idx_b} CSV 미발견"
-        )
+        raise ValueError(f"group_id={group_id} subject_index={idx_b} CSV 미발견")
     df_b = load_session_data(csv_files_b[0])
 
     # 3. compute_subject_summary로 waves_mean 확보함 (N2: run_full_pipeline 대신)
@@ -243,8 +239,8 @@ def analyze_pipeline_sequential(
             {"subject_index": idx_b, **summary_b},
         ],
         "similarity_features": similarity_features,
-        "pair_features": None,   # DUAL 전용 필드
-        "y_score": None,         # DUAL 전용 필드
+        "pair_features": None,  # DUAL 전용 필드
+        "y_score": None,  # DUAL 전용 필드
         "synchrony_score": None,  # DUAL 전용 필드 (ADR-14-004)
     }
 

@@ -1,14 +1,13 @@
 """SEQUENTIAL 파이프라인 및 similarity 엣지 케이스 통합 테스트 수행함"""
 
+from pathlib import Path
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from pathlib import Path
-from unittest.mock import patch
-
 from tests.conftest import TEST_GROUP_ID
-
 
 # ──────────────────────────────────────────────
 # Fixture

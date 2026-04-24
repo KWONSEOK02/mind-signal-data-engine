@@ -268,9 +268,7 @@ class TestAnalyzePipelineModeField:
         _, call_kwargs = mock_seq_pipeline.call_args
         assert call_kwargs["subject_indices"] == [1, 2]
 
-    def test_mode_invalid_returns_422(
-        self, test_client, pipeline_secret_header
-    ):
+    def test_mode_invalid_returns_422(self, test_client, pipeline_secret_header):
         """mode=INVALID → 422 validation error 반환함"""
         response = test_client.post(
             "/api/analyze/pipeline",
