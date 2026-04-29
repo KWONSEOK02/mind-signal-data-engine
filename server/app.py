@@ -10,7 +10,9 @@ from server.routes import analyze, export, health, stream
 from server.services.webhook import (
     register_to_backend,
     register_to_backend_dual,
+    register_to_backend_pending,
     start_heartbeat,
+    unregister_to_backend_pending,
 )
 
 load_dotenv(".env.local")
@@ -39,9 +41,15 @@ async def lifespan(app: FastAPI):
         settings.dual_2pc_group_id is not None
         and settings.dual_2pc_subject_index is not None
     )
+    # pending mode 판별: subject_index만 주입, group_id 미정 상태
+    has_subject_index = (
+        settings.dual_2pc_subject_index is not None
+        and settings.dual_2pc_group_id is None
+    )
 
     try:
         if is_dual_2pc:
+            # 분기 1: groupId + subjectIndex 모두 확정 — register_to_backend_dual 호출함
             await register_to_backend_dual(
                 public_url,
                 settings.dual_2pc_group_id,
@@ -55,6 +63,35 @@ async def lifespan(app: FastAPI):
         print(f"DE registration failed: {e}")
         raise SystemExit(1)
 
+    # Phase 17.6 LD-22/LD-18: 분기 2 — pending mode (groupId 미정, subjectIndex만 있음)
+    # 독립 try/except로 외부 SystemExit 전파 차단함
+    if has_subject_index:
+        pending_registered = False
+        for attempt in range(3):
+            try:
+                await register_to_backend_pending(
+                    public_url,
+                    settings.dual_2pc_subject_index,
+                    settings.engine_secret_key,
+                )
+                pending_registered = True
+                break
+            except Exception as e:  # 분기 2 내부 catch — 외부 SystemExit 차단함
+                print(
+                    f"[WARN] pending registration attempt {attempt + 1}/3 실패함: {e}"
+                )
+                if attempt < 2:
+                    await asyncio.sleep(2**attempt)  # 1s, 2s
+        if not pending_registered:
+            print(
+                "[WARN] pending registration 3회 실패함. DE 계속 실행, "
+                "수동 fallback 의존."
+            )
+        # 분기 2 내부 raise 금지 — yield까지 정상 진행
+        app.state.pending_registered = pending_registered
+    else:
+        app.state.pending_registered = False
+
     # heartbeat task (기존 — 5분마다 백엔드에 재등록)
     heartbeat_task = asyncio.create_task(
         start_heartbeat(public_url, settings.engine_secret_key)
@@ -64,6 +101,15 @@ async def lifespan(app: FastAPI):
 
     # --- shutdown ---
     heartbeat_task.cancel()
+
+    # Phase 17.6 LD-26: pending entry 삭제 호출함 (DE shutdown 시 soft-fail)
+    if has_subject_index and getattr(app.state, "pending_registered", False):
+        await unregister_to_backend_pending(
+            app.state.public_url,
+            settings.dual_2pc_subject_index,
+            settings.engine_secret_key,
+        )
+
     if settings.registration_mode == "ngrok":
         from pyngrok import ngrok
 
