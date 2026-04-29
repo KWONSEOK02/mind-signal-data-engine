@@ -50,6 +50,52 @@ async def register_to_backend_dual(
     )
 
 
+async def register_to_backend_pending(
+    public_url: str,
+    subject_index: int,
+    secret_key: str,
+) -> None:
+    """BE에 pending DE URL 사전 등록 호출함 (groupId 미정 상태)."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{settings.backend_url}/api/engine/register-pending",
+            headers={"Content-Type": "application/json"},
+            json={
+                "subjectIndex": subject_index,
+                "engineUrl": public_url,
+                "secretKey": secret_key,
+            },
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        print(f"[pending registration] subject={subject_index} url={public_url} OK")
+
+
+async def unregister_to_backend_pending(
+    public_url: str,
+    subject_index: int,
+    secret_key: str,
+) -> None:
+    """BE에 pending entry 삭제 호출함 (DE shutdown 시). soft-fail."""
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.request(
+                "DELETE",
+                f"{settings.backend_url}/api/engine/register-pending",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "subjectIndex": subject_index,
+                    "engineUrl": public_url,
+                    "secretKey": secret_key,
+                },
+                timeout=5.0,
+            )
+        print(f"[pending unregister] subject={subject_index} url={public_url} OK")
+    except Exception as e:
+        # soft-fail: shutdown 흐름이라 raise 금지
+        print(f"[WARN] pending unregister failed (soft): {e}")
+
+
 async def start_heartbeat(public_url: str, secret_key: str):
     """주기적으로 백엔드에 엔진 URL을 재등록하는 heartbeat 태스크임"""
     while True:
