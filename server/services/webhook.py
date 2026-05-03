@@ -97,7 +97,7 @@ async def unregister_to_backend_pending(
 
 
 async def start_heartbeat(public_url: str, secret_key: str):
-    """주기적으로 백엔드에 엔진 URL을 재등록하는 heartbeat 태스크임"""
+    """주기적으로 백엔드에 엔진 URL을 재등록하는 heartbeat 태스크임 (SEQUENTIAL mode 전용)"""
     while True:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SEC)
         try:
@@ -107,3 +107,21 @@ async def start_heartbeat(public_url: str, secret_key: str):
             # R2-1: register_to_backend가 RC-7로 naked 됐으므로 여기서 명시 보호
             # [RC3-1 반영] DE 서버 전체가 print() 사용 — 기존 convention 유지
             print(f"heartbeat register failed (non-fatal): {e}")
+
+
+async def start_heartbeat_dual(
+    public_url: str,
+    group_id: str,
+    subject_index: int,
+    secret_key: str,
+):
+    """DUAL_2PC mode 전용 heartbeat — 5분마다 register-dual 재호출함 (Phase 17.5)"""
+    while True:
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SEC)
+        try:
+            await register_to_backend_dual(
+                public_url, group_id, subject_index, secret_key
+            )
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            # heartbeat transient error 허용함 (log-and-continue)
+            print(f"dual heartbeat register failed (non-fatal): {e}")
