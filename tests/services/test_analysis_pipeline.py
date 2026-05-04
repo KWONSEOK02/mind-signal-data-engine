@@ -8,10 +8,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tests.conftest import (
-    DEFAULT_BAND_COLS,
-    TEST_GROUP_ID,
-)
 from server.services.analysis import (
     analyze_pipeline_sequential,
     average_by_timestamp,
@@ -22,7 +18,10 @@ from server.services.analysis import (
     run_full_pipeline,
     split_stimulus_windows,
 )
-
+from tests.conftest import (
+    DEFAULT_BAND_COLS,
+    TEST_GROUP_ID,
+)
 
 # ──────────────────────────────────────────────
 # TestAverageByTimestamp
@@ -54,14 +53,16 @@ class TestAverageByTimestamp:
     def test_time_col_preferred_over_timestamp(self, band_cols):
         """'time'과 'timestamp' 동시 존재 시 'time' 우선 사용함"""
         np.random.seed(42)
-        df = pd.DataFrame({
-            "time": [0, 0, 1, 1],
-            "timestamp": [10, 10, 20, 20],
-            "alpha": [1.0, 3.0, 2.0, 4.0],
-            "beta": [0.5, 0.5, 1.5, 1.5],
-            "theta": [0.1, 0.3, 0.2, 0.4],
-            "gamma": [0.2, 0.4, 0.3, 0.5],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0, 0, 1, 1],
+                "timestamp": [10, 10, 20, 20],
+                "alpha": [1.0, 3.0, 2.0, 4.0],
+                "beta": [0.5, 0.5, 1.5, 1.5],
+                "theta": [0.1, 0.3, 0.2, 0.4],
+                "gamma": [0.2, 0.4, 0.3, 0.5],
+            }
+        )
         result = average_by_timestamp(df, band_cols)
         # 'time' 기준 2개 그룹 → 2행
         assert len(result) == 2
@@ -133,8 +134,7 @@ class TestSplitStimulusWindows:
     def test_n_windows_per_stimulus(self, full_session_df, band_cols):
         """데이터 충분할 때 각 stimulus의 window 수가 올바름"""
         result = split_stimulus_windows(
-            full_session_df, band_cols,
-            stimulus_duration_sec=60, window_size_sec=10
+            full_session_df, band_cols, stimulus_duration_sec=60, window_size_sec=10
         )
         # 첫 번째 stimulus는 데이터 충분 → 6개 window
         assert len(result[0]) == 6
@@ -159,13 +159,16 @@ class TestSplitStimulusWindows:
     def test_short_data_partial_windows(self, band_cols):
         """데이터가 짧아 일부 stimulus가 비어있을 때 오류 미발생함"""
         # baseline(30) + 1 stimulus(60) = 90행만 제공, n_stimuli=3 요청
-        short_df = pd.DataFrame({
-            col: np.random.uniform(0.1, 1.0, 90) for col in band_cols
-        })
+        short_df = pd.DataFrame(
+            {col: np.random.uniform(0.1, 1.0, 90) for col in band_cols}
+        )
         result = split_stimulus_windows(
-            short_df, band_cols,
-            stimulus_duration_sec=60, window_size_sec=10,
-            n_stimuli=3, baseline_duration_sec=30
+            short_df,
+            band_cols,
+            stimulus_duration_sec=60,
+            window_size_sec=10,
+            n_stimuli=3,
+            baseline_duration_sec=30,
         )
         assert len(result) == 3
         assert len(result[0]) == 6  # 첫 stimulus는 완전함
@@ -368,8 +371,11 @@ class TestRunFullPipeline:
     def test_feature_count_matches_params(self):
         """subjects[i]['n_features'] == n_stimuli * n_windows * len(band_cols)"""
         result = run_full_pipeline(
-            TEST_GROUP_ID, [1, 2],
-            n_stimuli=10, window_size_sec=10, stimulus_duration_sec=60
+            TEST_GROUP_ID,
+            [1, 2],
+            n_stimuli=10,
+            window_size_sec=10,
+            stimulus_duration_sec=60,
         )
         expected_count = 10 * 6 * 4  # n_stimuli × n_windows × n_bands
         assert result["subjects"][0]["n_features"] == expected_count
@@ -377,7 +383,8 @@ class TestRunFullPipeline:
     def test_with_satisfaction_scores(self):
         """satisfaction_scores 제공 시 y_score가 float임"""
         result = run_full_pipeline(
-            TEST_GROUP_ID, [1, 2],
+            TEST_GROUP_ID,
+            [1, 2],
             satisfaction_scores={1: 7.5, 2: 6.0},
         )
         assert isinstance(result["y_score"], float)
@@ -410,7 +417,10 @@ class TestRunFullPipeline:
         """band_cols=None 시 기본값 사용됨"""
         result = run_full_pipeline(TEST_GROUP_ID, [1, 2])
         assert result["pipeline_params"]["band_cols"] == [
-            "alpha", "beta", "theta", "gamma"
+            "alpha",
+            "beta",
+            "theta",
+            "gamma",
         ]
 
     def test_synchrony_score_mocked(self):

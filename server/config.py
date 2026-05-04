@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -5,12 +7,17 @@ class Settings(BaseSettings):
     """환경변수 통합 관리 클래스임"""
 
     # FastAPI 서버
-    port: int = 5002
-    use_ngrok: bool = False  # 로컬 개발 시 False, 외부 접근 시 True
+    fastapi_port: int = 5002
+    registration_mode: Literal["local", "ngrok"] = "local"  # 등록 방식 선택
 
     # 백엔드 연동
     backend_url: str = "http://localhost:5000"
     engine_secret_key: str = "change-me-in-production"
+
+    # DUAL_2PC 세션 env (launcher 주입, 비-DUAL_2PC 기동 시 None)
+    dual_2pc_group_id: str | None = None
+    dual_2pc_subject_index: int | None = None
+    lan_ip: str | None = None  # LAN IP override (없으면 socket 자동 탐지)
 
     # Emotiv
     client_id: str = ""
@@ -31,8 +38,8 @@ class Settings(BaseSettings):
     baseline_duration_sec: int = 30  # baseline 구간 길이 (초)
     band_cols: list[str] = ["alpha", "beta", "theta", "gamma"]  # 사용할 대역
 
-    # ngrok
-    ngrok_auth_token: str = ""
+    # ngrok (REGISTRATION_MODE=ngrok 때만 필요)
+    ngrok_auth_token: str | None = None
 
     class Config:
         env_file = ".env.local"
