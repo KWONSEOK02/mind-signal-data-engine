@@ -2,6 +2,7 @@ import asyncio
 import socket
 from contextlib import asynccontextmanager
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
@@ -124,7 +125,8 @@ async def lifespan(app: FastAPI):
                 )
                 pending_registered = True
                 break
-            except Exception as e:  # 분기 2 내부 catch — 외부 SystemExit 차단함
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                # Fail-Fast: httpx 예외만 catch — 설정/직렬화 오류는 propagate
                 print(
                     f"[WARN] pending registration attempt {attempt + 1}/3 실패함: {e}"
                 )

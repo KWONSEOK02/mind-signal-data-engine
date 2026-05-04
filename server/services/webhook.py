@@ -79,7 +79,7 @@ async def unregister_to_backend_pending(
     """BE에 pending entry 삭제 호출함 (DE shutdown 시). soft-fail."""
     try:
         async with httpx.AsyncClient() as client:
-            await client.request(
+            response = await client.request(
                 "DELETE",
                 f"{settings.backend_url}/api/engine/register-pending",
                 headers={"Content-Type": "application/json"},
@@ -90,9 +90,10 @@ async def unregister_to_backend_pending(
                 },
                 timeout=5.0,
             )
+            response.raise_for_status()
         print(f"[pending unregister] subject={subject_index} url={public_url} OK")
-    except Exception as e:
-        # soft-fail: shutdown 흐름이라 raise 금지
+    except httpx.HTTPError as e:
+        # soft-fail: shutdown 흐름이라 raise 금지 — httpx 예외만 catch
         print(f"[WARN] pending unregister failed (soft): {e}")
 
 

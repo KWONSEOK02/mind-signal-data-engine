@@ -146,11 +146,13 @@ async def test_lifespan_pending_retry_3times_on_503(
         )
 
     # lifespan retry 루프 시뮬레이션: asyncio.sleep 패치 (대기 없이 즉시 진행)
+    # asyncio.coroutine은 Python 3.11+ 제거됨 → async def noop 사용함
     import asyncio
 
-    monkeypatch.setattr(
-        asyncio, "sleep", lambda *a, **kw: asyncio.coroutine(lambda: None)()
-    )
+    async def _noop_sleep(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _noop_sleep)
 
     # register_to_backend_pending 자체는 3회 시도 시 마지막에 HTTPStatusError raise
     # lifespan 분기 2는 이 예외를 잡아 soft-fail 처리 — 단위 테스트에서는 raise 확인
