@@ -2,6 +2,7 @@ import asyncio
 import socket
 from contextlib import asynccontextmanager
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
@@ -10,8 +11,10 @@ from server.routes import analyze, control, export, health, stream
 from server.services.webhook import (
     register_to_backend,
     register_to_backend_dual,
+    register_to_backend_pending,
     start_heartbeat,
     start_heartbeat_dual,
+    unregister_to_backend_pending,
 )
 
 load_dotenv(".env.local")
@@ -31,11 +34,11 @@ PLACEHOLDER_SECRETS = {
 async def lifespan(app: FastAPI):
     """서버 시작 시 URL 결정 + 백엔드 등록(모드별 분기) + heartbeat 수행함.
 
-    분기 (Phase 17.5 도입):
+    분기 (Phase 17.5 + 17.6 통합):
     1) dual_2pc_group_id + subject_index 둘 다 env → 즉시 register-dual +
        dual heartbeat (backward-compat)
-    2) subject_index만 env → pending 상태 기동 → /control/assign-group 대기
-       (heartbeat 미생성)
+    2) subject_index만 env → pending 상태 기동 → register_to_backend_pending
+       retry + /control/assign-group 대기 (heartbeat 미생성)
     3) 둘 다 없음 → SEQUENTIAL register + single heartbeat (backward-compat)
     """
     # Preflight soft-check: placeholder secret 감지 시 WARNING만 출력함 (Phase 17.5.1)
@@ -65,6 +68,9 @@ async def lifespan(app: FastAPI):
     app.state.registered_group_id = None
     app.state.heartbeat_task = None  # 분기 2는 미생성 → shutdown 가드용
     app.state.assign_lock = asyncio.Lock()
+    app.state.pending_registered = (
+        False  # 분기 2 retry 결과 — shutdown unregister 가드용
+    )
 
     # 모드 판별 — 빈 문자열("") env를 None과 동등하게 취급함 (Phase 17.5.2)
     # pydantic이 `DUAL_2PC_GROUP_ID=` 빈 값을 ""로 파싱해 is not None 통과하는 버그 방지
@@ -106,12 +112,52 @@ async def lifespan(app: FastAPI):
         print(f"DE registration failed: {e}")
         raise SystemExit(1)
 
+    # Phase 17.6 LD-22/LD-18: 분기 2 pending mode 시 BE pending registry에 등록 retry함
+    # 독립 try/except로 외부 SystemExit 전파 차단함
+    if has_subject_index and not has_group_id:
+        pending_registered = False
+        for attempt in range(3):
+            try:
+                await register_to_backend_pending(
+                    public_url,
+                    settings.dual_2pc_subject_index,
+                    settings.engine_secret_key,
+                )
+                pending_registered = True
+                break
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                # Fail-Fast: httpx 예외만 catch — 설정/직렬화 오류는 propagate
+                print(
+                    f"[WARN] pending registration attempt {attempt + 1}/3 실패함: {e}"
+                )
+                if attempt < 2:
+                    await asyncio.sleep(2**attempt)  # 1s, 2s
+        if not pending_registered:
+            print(
+                "[WARN] pending registration 3회 실패함. DE 계속 실행, "
+                "수동 fallback 의존."
+            )
+        # 분기 2 내부 raise 금지 — yield까지 정상 진행
+        app.state.pending_registered = pending_registered
+
     yield
 
     # --- shutdown ---
     # heartbeat_task 가드 (분기 2는 None 가능)
     if app.state.heartbeat_task is not None:
         app.state.heartbeat_task.cancel()
+
+    # Phase 17.6 LD-26: pending entry 삭제 호출함 (DE shutdown 시 soft-fail)
+    if (
+        has_subject_index
+        and not has_group_id
+        and getattr(app.state, "pending_registered", False)
+    ):
+        await unregister_to_backend_pending(
+            app.state.public_url,
+            settings.dual_2pc_subject_index,
+            settings.engine_secret_key,
+        )
 
     if settings.registration_mode == "ngrok":
         from pyngrok import ngrok
