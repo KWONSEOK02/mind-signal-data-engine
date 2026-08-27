@@ -140,7 +140,9 @@ if ($avFound) {
 # 0d. Conda env exists (default: .conda\envs, fallback: miniconda3\envs)
 $condaCandidates = @(
     "C:\Users\gs071\.conda\envs\$CondaEnv",
-    "C:\Users\gs071\miniconda3\envs\$CondaEnv"
+    "C:\Users\gs071\miniconda3\envs\$CondaEnv",
+    "$env:USERPROFILE\.conda\envs\$CondaEnv",
+    "$env:USERPROFILE\miniconda3\envs\$CondaEnv"
 )
 $condaPath = $condaCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $condaPath) {
