@@ -299,9 +299,17 @@ class AssignGroupRequest(BaseModel):
 
 
 @app.post("/control/assign-group")
-async def assign_group(req: AssignGroupRequest):
-    """Playwright runtime groupId 주입 + /register-dual trigger 처리함."""
+async def assign_group(
+    req: AssignGroupRequest,
+    x_engine_secret: str = Header(alias="X-Engine-Secret"),
+):
+    """Playwright runtime groupId 주입 + /register-dual trigger 처리함.
+
+    실 DE `server/routes/control.py`가 이 헤더를 요구하므로 mock도 동일하게 요구함 —
+    빠져 있으면 mock에서만 통과하는 호출을 실물이 거부하는 발산이 생김.
+    """
     global _current_group_id
+    _check_secret(x_engine_secret)
     _current_group_id = req.group_id
 
     public_url = f"http://localhost:{_args.port}"

@@ -569,21 +569,31 @@ class MindSignalStreamer(Cortex):
 
         def _check():
             while self._watchdog_active:
-                healthy = check_health(self.proxy_url)
-                tripped = tracker.record(healthy, time.monotonic())
-                if tripped and not self._fail_closed_triggered:
-                    self._fail_closed_triggered = True
-                    print(
-                        "[FAIL_CLOSED] proxy /health fail-closed 지속으로"
-                        f" 측정 중단함 (subject {self.subject_index})"
-                    )
-                    try:
-                        self.close_session()
-                    except Exception as e:
-                        logger.warning(f"close_session 실패 (무시): {e}")
-                    finally:
-                        self.close()
-                    break
+                # 이 스레드는 fail-closed 안전장치라 예외로 죽으면 안 됨 — 죽으면
+                # 프록시가 끊겨도 측정이 계속되고 아무 흔적도 남지 않음.
+                # 예상 밖 예외는 기록하고 다음 폴링을 계속함
+                try:
+                    healthy = check_health(self.proxy_url)
+                    tripped = tracker.record(healthy, time.monotonic())
+                    if tripped and not self._fail_closed_triggered:
+                        self._fail_closed_triggered = True
+                        print(
+                            "[FAIL_CLOSED] proxy /health fail-closed 지속으로"
+                            f" 측정 중단함 (subject {self.subject_index})"
+                        )
+                        try:
+                            self.close_session()
+                        except Exception as e:
+                            logger.warning(f"close_session 실패 (무시): {e}")
+                        finally:
+                            # close 가 raise 하면 break 를 못 타 루프가 헛돎
+                            try:
+                                self.close()
+                            except Exception as e:
+                                logger.warning(f"close 실패 (무시): {e}")
+                        break
+                except Exception as e:
+                    logger.warning(f"proxy health 폴링 실패 (계속함): {e}")
                 time.sleep(self.proxy_health_poll_interval_sec)
 
         t = threading.Thread(target=_check, daemon=True)
